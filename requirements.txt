@@ -1,0 +1,11 @@
+streamlit
+langchain
+langchain-community
+tiktoken
+spacy
+nltk
+sentence-transformers
+scikit-learn
+plotly
+pandas
+numpy
