@@ -11,7 +11,7 @@ def check_dependencies():
     """Проверяет установленность зависимостей"""
     required_packages = [
         'streamlit', 'langchain', 'tiktoken', 'nltk', 
-        'sentence-transformers', 'plotly', 'pandas', 'numpy'
+        'plotly', 'pandas', 'numpy'
     ]
     
     missing_packages = []

@@ -9,6 +9,13 @@ from plotly.subplots import make_subplots
 from typing import List, Dict, Any
 import numpy as np
 
+# Проверяем доступность nltk
+try:
+    import nltk
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
+
 class ChunkingAnalyzer:
     """Класс для анализа результатов чанкования"""
     
@@ -44,45 +51,7 @@ class ChunkingAnalyzer:
         self.results[method_name] = analysis
         return analysis
     
-    def create_size_distribution_chart(self) -> go.Figure:
-        """Создает график распределения размеров чанков"""
-        if not self.results:
-            return go.Figure()
-        
-        fig = make_subplots(
-            rows=len(self.results), 
-            cols=1,
-            subplot_titles=[f"Метод: {method}" for method in self.results.keys()],
-            vertical_spacing=0.05
-        )
-        
-        colors = px.colors.qualitative.Set3
-        
-        for i, (method, data) in enumerate(self.results.items()):
-            chunk_sizes = data['chunk_sizes']
-            if chunk_sizes:
-                fig.add_trace(
-                    go.Histogram(
-                        x=chunk_sizes,
-                        name=method,
-                        nbinsx=20,
-                        marker_color=colors[i % len(colors)],
-                        opacity=0.7
-                    ),
-                    row=i+1, col=1
-                )
-        
-        fig.update_layout(
-            title="Распределение размеров чанков по методам",
-            height=300 * len(self.results),
-            showlegend=False
-        )
-        
-        fig.update_xaxes(title_text="Размер чанка (символы)")
-        fig.update_yaxes(title_text="Количество чанков")
-        
-        return fig
-    
+
     def create_comparison_chart(self) -> go.Figure:
         """Создает сравнительный график метрик"""
         if not self.results:
@@ -211,10 +180,9 @@ class TextStatistics:
         paragraphs = [p for p in text.split('\n\n') if p.strip()]
         words = text.split()
         
-        try:
-            import nltk
+        if NLTK_AVAILABLE:
             sentences = nltk.sent_tokenize(text)
-        except:
+        else:
             # Простой способ подсчета предложений
             sentences = [s for s in text.split('.') if s.strip()]
         

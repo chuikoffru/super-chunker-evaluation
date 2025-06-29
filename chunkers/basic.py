@@ -1,38 +1,24 @@
 """
-Модуль с различными методами чанкования текстов
+Базовые методы чанкования текстов
 """
 
-import re
 import nltk
 import tiktoken
-from typing import List, Dict, Any, Optional
-from abc import ABC, abstractmethod
+from typing import List, Dict, Any
 from langchain.text_splitter import (
     CharacterTextSplitter,
     RecursiveCharacterTextSplitter,
     TokenTextSplitter,
     SpacyTextSplitter
 )
-from sentence_transformers import SentenceTransformer
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+
+from .base import BaseChunker
 
 # Загружаем необходимые данные NLTK
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
-
-class BaseChunker(ABC):
-    """Базовый класс для всех чанкеров"""
-    
-    @abstractmethod
-    def chunk_text(self, text: str, **kwargs) -> List[str]:
-        pass
-    
-    @abstractmethod
-    def get_params(self) -> Dict[str, Any]:
-        pass
 
 class CharacterChunker(BaseChunker):
     """Чанкование по символам"""
@@ -86,9 +72,12 @@ class TokenChunker(BaseChunker):
         self.model_name = model_name
         
     def chunk_text(self, text: str, **kwargs) -> List[str]:
+        # Пытаемся получить кодировку для указанной модели
+        encoding = None
         try:
             encoding = tiktoken.encoding_for_model(self.model_name)
         except KeyError:
+            # Используем fallback если модель не найдена
             encoding = tiktoken.get_encoding("cl100k_base")
             
         splitter = TokenTextSplitter(
@@ -153,69 +142,6 @@ class ParagraphChunker(BaseChunker):
             'overlap_paragraphs': self.overlap_paragraphs
         }
 
-class SemanticChunker(BaseChunker):
-    """Семантическое чанкование на основе схожести предложений"""
-    
-    def __init__(self, similarity_threshold: float = 0.7, max_chunk_size: int = 1000):
-        self.similarity_threshold = similarity_threshold
-        self.max_chunk_size = max_chunk_size
-        self.model: Optional[SentenceTransformer] = None
-        
-    def _load_model(self):
-        if self.model is None:
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-    
-    def chunk_text(self, text: str, **kwargs) -> List[str]:
-        self._load_model()
-        
-        sentences = nltk.sent_tokenize(text)
-        if len(sentences) <= 1:
-            return [text]
-            
-        # Проверяем, что модель загружена
-        if self.model is None:
-            raise RuntimeError("Модель не загружена")
-            
-        # Получаем эмбеддинги предложений
-        embeddings = self.model.encode(sentences)
-        
-        # Вычисляем схожесть между соседними предложениями
-        similarities = []
-        for i in range(len(embeddings) - 1):
-            sim = cosine_similarity([embeddings[i]], [embeddings[i + 1]])[0][0]
-            similarities.append(sim)
-        
-        # Находим точки разделения (где схожесть ниже порога)
-        split_points = [0]
-        for i, sim in enumerate(similarities):
-            if sim < self.similarity_threshold:
-                split_points.append(i + 1)
-        split_points.append(len(sentences))
-        
-        # Создаем чанки
-        chunks = []
-        for i in range(len(split_points) - 1):
-            start = split_points[i]
-            end = split_points[i + 1]
-            chunk_text = ' '.join(sentences[start:end])
-            
-            # Проверяем размер чанка
-            if len(chunk_text) > self.max_chunk_size:
-                # Если чанк слишком большой, разбиваем его дальше
-                sub_chunker = CharacterChunker(chunk_size=self.max_chunk_size, chunk_overlap=100)
-                sub_chunks = sub_chunker.chunk_text(chunk_text)
-                chunks.extend(sub_chunks)
-            else:
-                chunks.append(chunk_text)
-                
-        return chunks
-    
-    def get_params(self) -> Dict[str, Any]:
-        return {
-            'similarity_threshold': self.similarity_threshold,
-            'max_chunk_size': self.max_chunk_size
-        }
-
 class FixedSizeChunker(BaseChunker):
     """Простое чанкование фиксированного размера"""
     
@@ -239,15 +165,4 @@ class FixedSizeChunker(BaseChunker):
         return {
             'chunk_size': self.chunk_size,
             'overlap': self.overlap
-        }
-
-# Реестр доступных чанкеров
-CHUNKERS = {
-    'Символы': CharacterChunker,
-    'Рекурсивный': RecursiveChunker,
-    'Токены': TokenChunker,
-    'Предложения': SentenceChunker,
-    'Абзацы': ParagraphChunker,
-    'Семантический': SemanticChunker,
-    'Фиксированный размер': FixedSizeChunker
-} 
+        } 

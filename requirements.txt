@@ -4,7 +4,7 @@ langchain-community
 tiktoken
 spacy
 nltk
-sentence-transformers
+httpx
 scikit-learn
 plotly
 pandas
