@@ -16,12 +16,16 @@ def setup_page_config():
 def initialize_session_state():
     """Инициализирует состояние сессии"""
     from analyzer import ChunkingAnalyzer
+    from analyzer_advanced import PSRAnalyzer
     
     if 'analyzer' not in st.session_state:
         st.session_state.analyzer = ChunkingAnalyzer()
 
     if 'chunking_results' not in st.session_state:
         st.session_state.chunking_results = {}
+    
+    if 'psr_analyzer' not in st.session_state:
+        st.session_state.psr_analyzer = PSRAnalyzer()
 
 # Дефолтные методы чанкования для выбора
 DEFAULT_METHODS = ['Символы', 'Рекурсивный', 'Токены', 'Spacy семантический']
