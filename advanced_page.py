@@ -65,10 +65,36 @@ def render_sidebar():
             if st.checkbox(SEMANTIC_METHODS[method], key=method):
                 selected_methods.append(method)
         
-        # Общие настройки
+        # Объединенные настройки чанкования
         st.markdown("---")
-        st.markdown("### ⚙️ Настройки API")
+        st.markdown("### ⚙️ Настройки чанкования")
         
+        with st.expander("🔧 Основные параметры чанкования", expanded=True):
+            max_chunk_size = st.slider("Макс. размер чанка", 500, 3000, 1000,
+                                     help="Максимальный размер чанка в символах")
+            similarity_threshold = st.slider("Порог схожести", 0.1, 0.9, 0.7, 0.05,
+                                            help="Порог семантической схожести для объединения текста")
+            
+            window_size = st.slider(
+                "Размер окна анализа",
+                min_value=2, max_value=10, value=3,
+                help="Размер скользящего окна для анализа контекста (для продвинутых методов)"
+            )
+            
+            min_coherence = st.slider(
+                "Минимальная связность",
+                min_value=0.0, max_value=1.0, value=0.3, step=0.05,
+                help="Минимальная внутренняя связность чанка (для продвинутых методов)"
+            )
+            
+            enable_clustering = st.checkbox(
+                "Включить кластеризацию",
+                value=True,
+                help="Использовать тематическую кластеризацию в Topic-Aware методе"
+            )
+        
+        # API настройки
+        st.markdown("---")
         with st.expander("🔑 API Конфигурация"):
             api_key = st.text_input(
                 "OpenAI API Key", 
@@ -84,33 +110,6 @@ def render_sidebar():
             
             timeout = st.slider("Timeout (сек)", 10, 60, 30)
             max_retries = st.slider("Количество попыток", 1, 5, 3)
-        
-        # Настройки для революционных методов
-        st.markdown("---")
-        with st.expander("⚡ Настройки революционных методов"):
-            window_size = st.slider(
-                "Размер окна анализа",
-                min_value=2, max_value=10, value=3,
-                help="Размер скользящего окна для анализа контекста"
-            )
-            
-            min_coherence = st.slider(
-                "Минимальная связность",
-                min_value=0.0, max_value=1.0, value=0.3, step=0.05,
-                help="Минимальная внутренняя связность чанка"
-            )
-            
-            enable_clustering = st.checkbox(
-                "Включить кластеризацию",
-                value=True,
-                help="Использовать тематическую кластеризацию в Topic-Aware методе"
-            )
-        
-        # Стандартные настройки чанкования
-        st.markdown("---")
-        with st.expander("📏 Стандартные настройки"):
-            max_chunk_size = st.slider("Макс. размер чанка", 500, 3000, 1000)
-            similarity_threshold = st.slider("Порог схожести", 0.1, 0.9, 0.7, 0.05)
         
         # Информация об автоматическом сбросе результатов
         st.markdown("---")
@@ -170,19 +169,19 @@ def show_advanced_page():
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown("**🔧 Основные параметры:**")
+                st.markdown("**🔧 Параметры чанкования:**")
                 st.write(f"• Методы: {', '.join(params['selected_methods'])}")
                 st.write(f"• Макс. размер чанка: {params['max_chunk_size']}")
                 st.write(f"• Порог схожести: {params['similarity_threshold']}")
-                st.write(f"• Timeout: {params['timeout']}с")
-                st.write(f"• Попыток: {params['max_retries']}")
-            
-            with col2:
-                st.markdown("**⚡ Революционные настройки:**")
                 st.write(f"• Размер окна: {params['window_size']}")
                 st.write(f"• Мин. связность: {params['min_coherence']}")
+            
+            with col2:
+                st.markdown("**🔑 API и дополнительно:**")
                 st.write(f"• Кластеризация: {'Вкл' if params['enable_clustering'] else 'Выкл'}")
                 st.write(f"• Модель: {params['model_name']}")
+                st.write(f"• Timeout: {params['timeout']}с")
+                st.write(f"• Попыток: {params['max_retries']}")
                 api_status = "Установлен" if params['api_key'] else "Не установлен"
                 st.write(f"• API ключ: {api_status}")
 
@@ -317,16 +316,10 @@ def render_method_results(method_results: List[Dict]):
             with col3:
                 st.metric("Покрытие", f"{result['chunks_coverage']:.1%}")
             
-            # Отображение параметров chunker'а (если есть)
-            if 'chunker_params' in result and result['chunker_params']:
-                st.markdown("**Параметры чанкования:**")
-                params_text = ", ".join([f"{k}: {v}" for k, v in result['chunker_params'].items()])
-                st.code(params_text)
-            
             # Отображение чанков
             st.markdown("**Чанки:**")
             for i, chunk in enumerate(result['chunks'], 1):
-                st.code(f"Чанк {i} ({len(chunk)} символов):\n{chunk[:200]}{'...' if len(chunk) > 200 else ''}")
+                st.code(f"Чанк {i} ({len(chunk)} символов):\n{chunk}", wrap_lines=True)
 
 def render_comparison_table(results: Dict[str, List[Dict]]):
     """Отображает сравнительную таблицу результатов"""
