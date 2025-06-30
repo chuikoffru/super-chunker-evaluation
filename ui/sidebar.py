@@ -14,7 +14,7 @@ from config import (
 from ui.input import render_sidebar_text_input
 
 # Базовые методы чанкования (без семантических)
-BASIC_METHODS = ['Символы', 'Рекурсивный', 'Токены', 'Предложения', 'Абзацы', 'Фиксированный размер']
+BASIC_METHODS = ['Символы', 'Рекурсивный', 'Токены', 'Предложения', 'Абзацы', 'Символы (LangChain)']
 
 def render_sidebar() -> tuple[List[str], Dict[str, Dict[str, Any]]]:
     """
@@ -152,6 +152,10 @@ def _render_basic_chunker_params_in_expander(method_name: str) -> Dict[str, Any]
     params = {}
     
     if method_name == 'Символы':
+        # Теперь "Символы" использует FixedSizeChunker - строгое разбиение по символам
+        params = _render_fixed_size_chunker_params_in_expander(method_name)
+    elif method_name == 'Символы (LangChain)':
+        # Старый CharacterChunker с разделителями
         params = _render_character_chunker_params_in_expander(method_name)
     elif method_name == 'Рекурсивный':
         params = _render_recursive_chunker_params_in_expander(method_name)
@@ -161,8 +165,6 @@ def _render_basic_chunker_params_in_expander(method_name: str) -> Dict[str, Any]
         params = _render_sentence_chunker_params_in_expander(method_name)
     elif method_name == 'Абзацы':
         params = _render_paragraph_chunker_params_in_expander(method_name)
-    elif method_name == 'Фиксированный размер':
-        params = _render_fixed_size_chunker_params_in_expander(method_name)
     
     return params
 
@@ -326,6 +328,10 @@ def _render_basic_chunker_params(method_name: str) -> Dict[str, Any]:
     params = {}
     
     if method_name == 'Символы':
+        # Теперь "Символы" использует FixedSizeChunker
+        params = _render_fixed_size_chunker_params(method_name)
+    elif method_name == 'Символы (LangChain)':
+        # Старый CharacterChunker с разделителями
         params = _render_character_chunker_params(method_name)
     elif method_name == 'Рекурсивный':
         params = _render_recursive_chunker_params(method_name)
@@ -335,8 +341,6 @@ def _render_basic_chunker_params(method_name: str) -> Dict[str, Any]:
         params = _render_sentence_chunker_params(method_name)
     elif method_name == 'Абзацы':
         params = _render_paragraph_chunker_params(method_name)
-    elif method_name == 'Фиксированный размер':
-        params = _render_fixed_size_chunker_params(method_name)
     
     return params
 

@@ -218,14 +218,14 @@ def _render_details_tab():
 def _render_method_details(method: str):
     """Отрисовывает детали для конкретного метода"""
     try:
-        # График размеров чанков
-        chunk_viz = st.session_state.analyzer.create_chunk_visualization(
-            method, max_chunks=20
-        )
+        # Получаем правильные данные чанков из session_state
+        chunks = st.session_state.chunking_results[method]['chunks']
+        
+        # Создаем график размеров чанков напрямую с правильными данными
+        chunk_viz = _create_chunk_size_chart(chunks, method, max_chunks=20)
         st.plotly_chart(chunk_viz, use_container_width=True)
         
         # Просмотр содержимого чанков
-        chunks = st.session_state.chunking_results[method]['chunks']
         
         st.write(f"**Общее количество чанков:** {len(chunks)}")
         
@@ -258,6 +258,45 @@ def _render_method_details(method: str):
                 
     except Exception as e:
         st.error(f"Ошибка при отображении деталей: {str(e)}")
+
+def _create_chunk_size_chart(chunks: List[str], method_name: str, max_chunks: int = 20):
+    """Создает график размеров чанков с правильными данными"""
+    import plotly.graph_objects as go
+    import plotly.express as px
+    
+    # Ограничиваем количество отображаемых чанков
+    display_chunks = chunks[:max_chunks]
+    chunk_sizes = [len(chunk) for chunk in display_chunks]
+    chunk_indices = list(range(1, len(display_chunks) + 1))
+    
+    # Создаем превью чанков (первые 100 символов)
+    chunk_previews = [
+        chunk[:100] + "..." if len(chunk) > 100 else chunk 
+        for chunk in display_chunks
+    ]
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=chunk_indices,
+        y=chunk_sizes,
+        text=chunk_previews,
+        textposition='none',  # Убираем текст с баров
+        hovertemplate='<b>Чанк %{x}</b><br>' +
+                     'Размер: %{y} символов<br>' +
+                     'Превью: %{text}<br>' +
+                     '<extra></extra>',
+        marker_color=px.colors.sequential.Viridis
+    ))
+    
+    fig.update_layout(
+        title=f"Размеры чанков - {method_name} (первые {len(display_chunks)} чанков)",
+        xaxis_title="Номер чанка",
+        yaxis_title="Размер чанка (символы)",
+        height=400
+    )
+    
+    return fig
 
 def _render_configs_tab():
     """Отрисовывает таб с конфигурациями"""

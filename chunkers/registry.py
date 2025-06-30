@@ -17,14 +17,14 @@ from .semantic import (
 
 # Реестр доступных чанкеров
 CHUNKERS = {
-    'Символы': CharacterChunker,
+    'Символы': FixedSizeChunker,  # Используем FixedSizeChunker для настоящего разбиения по символам
     'Рекурсивный': RecursiveChunker,
     'Токены': TokenChunker,
     'Предложения': SentenceChunker,
     'Абзацы': ParagraphChunker,
     'Spacy семантический': SpacySemanticChunker,
     'OpenAI семантический': OpenAISemanticChunker,
-    'Фиксированный размер': FixedSizeChunker
+    'Символы (LangChain)': CharacterChunker,  # Переименовываем старый метод
 }
 
 def get_chunker_by_name(name: str):
@@ -64,10 +64,10 @@ def get_chunkers_by_category():
     """
     return {
         'Базовые': {
-            'Символы': CharacterChunker,
+            'Символы': FixedSizeChunker,  # Настоящее символьное разбиение
             'Рекурсивный': RecursiveChunker,
             'Токены': TokenChunker,
-            'Фиксированный размер': FixedSizeChunker
+            'Символы (LangChain)': CharacterChunker  # Разбиение с разделителями
         },
         'Структурные': {
             'Предложения': SentenceChunker,
