@@ -142,10 +142,6 @@ def render_sidebar_text_input() -> str:
     elif text_source == "Загрузить файл":
         input_text = _render_sidebar_file_upload_input()
     
-    # Отображение статистики текста в компактном виде
-    if input_text:
-        _render_sidebar_text_statistics(input_text)
-    
     return input_text
 
 def _render_sidebar_sample_text_input() -> str:
@@ -162,11 +158,19 @@ def _render_sidebar_sample_text_input() -> str:
     preview_text = input_text[:200] + "..." if len(input_text) > 200 else input_text
     st.sidebar.text_area("Превью:", value=preview_text, height=100, disabled=True)
     
+    # Показываем статистику после превью
+    _render_sidebar_text_statistics(input_text)
+    
     return input_text
 
 def _render_sidebar_manual_text_input() -> str:
     """Отрисовывает поле для ручного ввода текста в sidebar"""
     input_text = st.sidebar.text_area("Введите или вставьте текст:", height=200)
+    
+    # Показываем статистику если есть текст
+    if input_text:
+        _render_sidebar_text_statistics(input_text)
+    
     return input_text
 
 def _render_sidebar_file_upload_input() -> str:
@@ -186,6 +190,10 @@ def _render_sidebar_file_upload_input() -> str:
             preview_text = input_text[:200] + "..." if len(input_text) > 200 else input_text
             st.sidebar.text_area("Превью загруженного:", value=preview_text, height=100, disabled=True)
             st.sidebar.success(f"✅ '{uploaded_file.name}' загружен!")
+            
+            # Показываем статистику после превью
+            _render_sidebar_text_statistics(input_text)
+            
         except UnicodeDecodeError:
             st.sidebar.error("Ошибка при чтении файла. Убедитесь, что файл в формате UTF-8.")
         except Exception as e:
@@ -198,12 +206,16 @@ def _render_sidebar_text_statistics(text: str):
     text_stats = TextStatistics.get_text_stats(text)
     
     if text_stats:
-        st.sidebar.markdown("**📊 Статистика:**")
+        # Отображаем ключевые метрики в компактном виде с правильными ключами
+        key_stats_mapping = {
+            'Символов': 'Общее количество символов',
+            'Слов': 'Количество слов', 
+            'Предложений': 'Количество предложений',
+            'Абзацев': 'Количество абзацев'
+        }
         
-        # Отображаем ключевые метрики в компактном виде
-        key_stats = ['Символов', 'Слов', 'Предложений', 'Абзацев']
-        for stat_name in key_stats:
-            if stat_name in text_stats:
-                st.sidebar.text(f"{stat_name}: {text_stats[stat_name]}")
+        for display_name, stat_key in key_stats_mapping.items():
+            if stat_key in text_stats:
+                st.sidebar.text(f"{display_name}: {text_stats[stat_key]}")
     else:
-        st.sidebar.warning("Не удалось получить статистику текста")
+        st.warning("Не удалось получить статистику текста")

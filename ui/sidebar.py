@@ -109,7 +109,7 @@ def render_basic_sidebar_with_input() -> tuple[str, List[str], Dict[str, Dict[st
         Кортеж из (входной_текст, выбранные_методы, конфигурации_методов)
     """
     # Expander для ввода текста
-    with st.sidebar.expander("📝 Входной текст", expanded=True):
+    with st.sidebar.expander("📝 Статистика текста", expanded=True):
         input_text = render_sidebar_text_input()
     
     # Expander для настроек чанкования  
