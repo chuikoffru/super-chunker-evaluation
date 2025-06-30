@@ -27,8 +27,11 @@ def initialize_session_state():
     if 'psr_analyzer' not in st.session_state:
         st.session_state.psr_analyzer = PSRAnalyzer()
 
-# Дефолтные методы чанкования для выбора
+# Дефолтные методы чанкования для выбора (теперь для полной версии с семантическими)
 DEFAULT_METHODS = ['Символы', 'Рекурсивный', 'Токены', 'Spacy семантический']
+
+# Базовые методы по умолчанию (без семантических)
+DEFAULT_BASIC_METHODS = ['Символы', 'Рекурсивный', 'Токены']
 
 # Настройки файлов для загрузки
 ALLOWED_FILE_TYPES = ['txt', 'md', 'rtf']
