@@ -1,15 +1,14 @@
 """
-UI модуль для продвинутого семантического анализа с PSR оценкой
+UI модуль для продвинутого семантического чанкования
 """
 
 import streamlit as st
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from typing import List, Dict, Any
+import time
+import hashlib
+from typing import List, Dict, Any, Optional, Tuple
 
-from chunkers.semantic import AdvancedSemanticChunker
-from analyzer_advanced import PSRAnalyzer
 from sample_texts import SAMPLE_TEXTS
+from chunkers.registry import get_chunker_by_name
 
 def load_test_texts() -> List[Dict[str, str]]:
     """Загружает тестовые тексты разного размера с названиями"""
@@ -18,7 +17,7 @@ def load_test_texts() -> List[Dict[str, str]]:
     # Добавляем примеры из sample_texts.py (это словарь)
     for title, text in SAMPLE_TEXTS.items():
         if isinstance(text, str) and len(text) > 100:
-            texts.append({"title": title, "text": text})
+            texts.append({"name": title, "text": text})
     
     # Добавляем тексты разной длины для тестирования масштабируемости
     base_text = """
@@ -29,388 +28,18 @@ def load_test_texts() -> List[Dict[str, str]]:
     """
     
     # Короткий текст
-    texts.append({"title": "Тестовый текст (короткий)", "text": base_text})
+    texts.append({"name": "Тестовый текст (короткий)", "text": base_text})
     
     # Средний текст
-    texts.append({"title": "Тестовый текст (средний)", "text": base_text * 5})
+    texts.append({"name": "Тестовый текст (средний)", "text": base_text * 5})
     
     # Длинный текст
-    texts.append({"title": "Тестовый текст (длинный)", "text": base_text * 20})
+    texts.append({"name": "Тестовый текст (длинный)", "text": base_text * 20})
     
     # Очень длинный текст
-    texts.append({"title": "Тестовый текст (очень длинный)", "text": base_text * 50})
+    texts.append({"name": "Тестовый текст (очень длинный)", "text": base_text * 50})
     
     return texts
-
-def create_chunker(method: str, params: Dict[str, Any]) -> AdvancedSemanticChunker:
-    """Создает экземпляр продвинутого семантического чанкера"""
-    return AdvancedSemanticChunker(
-        method=method,
-        similarity_threshold=params.get('similarity_threshold', 0.7),
-        max_chunk_size=params.get('max_chunk_size', 1000),
-        api_url=params.get('api_url', 'https://api.openai.com/v1/embeddings'),
-        api_key=params.get('api_key', ''),
-        model_name=params.get('model_name', 'text-embedding-ada-002'),
-        timeout=params.get('timeout', 30),
-        max_retries=params.get('max_retries', 3),
-        window_size=params.get('window_size', 3)
-    )
-
-def render_psr_metrics(psr_results: Dict[str, Any]):
-    """Отображает PSR метрики в виде красивых карточек"""
-    psr_score = psr_results['psr_score']
-    
-    # Основные PSR оценки
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            "🚀 Performance", 
-            f"{psr_score['performance_score']:.2f}",
-            help="Производительность: скорость и эффективность использования ресурсов"
-        )
-    
-    with col2:
-        st.metric(
-            "📈 Scalability", 
-            f"{psr_score['scalability_score']:.2f}",
-            help="Масштабируемость: способность обрабатывать большие объемы данных"
-        )
-    
-    with col3:
-        st.metric(
-            "🎯 Reliability", 
-            f"{psr_score['reliability_score']:.2f}",
-            help="Надежность: качество и консистентность результатов"
-        )
-    
-    with col4:
-        grade_color = {
-            "A+": "🟢", "A": "🟢", "B+": "🟡", "B": "🟡", 
-            "C+": "🟠", "C": "🟠", "D": "🔴", "F": "🔴"
-        }
-        st.metric(
-            f"{grade_color.get(psr_score['grade'], '⚪')} PSR Score", 
-            f"{psr_score['total_psr_score']:.2f} ({psr_score['grade']})",
-            help="Общая оценка PSR: Performance + Scalability + Reliability"
-        )
-
-def render_detailed_metrics(results: Dict[str, Any]):
-    """Отображает детальные метрики в развернутом виде"""
-    
-    # Performance детали
-    with st.expander("📊 Детали производительности"):
-        perf = results['performance']
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Среднее время выполнения", f"{perf['avg_execution_time']:.3f} сек")
-            st.metric("Скорость обработки", f"{perf['chars_per_second']:.0f} симв/сек")
-        
-        with col2:
-            st.metric("Максимальное время", f"{perf['max_execution_time']:.3f} сек")
-            st.metric("Использование памяти", f"{perf['avg_memory_usage']:.1f} МБ")
-    
-    # Scalability детали
-    with st.expander("📈 Детали масштабируемости"):
-        scale = results['scalability']
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Фактор масштабируемости", f"{scale['scalability_factor']:.3f}")
-            st.metric("Максимальный размер текста", f"{scale['max_text_size_handled']:.0f} симв")
-        
-        with col2:
-            st.metric("Коэффициент эффективности", f"{scale['efficiency_ratio']:.2f}")
-            st.metric("Корреляция размер-время", f"{scale['size_correlation']:.3f}")
-    
-    # Reliability детали
-    with st.expander("🎯 Детали надежности"):
-        rel = results['reliability']
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Консистентность размеров", f"{rel['chunk_size_consistency']:.3f}")
-            st.metric("Точность границ", f"{rel['boundary_accuracy']:.3f}")
-        
-        with col2:
-            st.metric("Семантическая когерентность", f"{rel['semantic_coherence']:.3f}")
-            st.metric("Процент успеха", f"{rel['success_rate']*100:.1f}%")
-
-def create_comparison_chart(analyzer: PSRAnalyzer):
-    """Создает диаграмму сравнения методов"""
-    comparison = analyzer.get_comparison_report()
-    
-    if not comparison or not comparison.get('methods'):
-        st.warning("Нет данных для сравнения")
-        return
-    
-    # Подготавливаем данные для графика
-    methods = []
-    performance_scores = []
-    scalability_scores = []
-    reliability_scores = []
-    total_scores = []
-    
-    for method in comparison['methods']:
-        result = analyzer.results[method]
-        psr = result['psr_score']
-        
-        methods.append(method)
-        performance_scores.append(psr['performance_score'])
-        scalability_scores.append(psr['scalability_score'])
-        reliability_scores.append(psr['reliability_score'])
-        total_scores.append(psr['total_psr_score'])
-    
-    # Создаем subplot с несколькими графиками
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('Performance', 'Scalability', 'Reliability', 'Overall PSR Score'),
-        specs=[[{"type": "bar"}, {"type": "bar"}],
-               [{"type": "bar"}, {"type": "bar"}]]
-    )
-    
-    # Performance
-    fig.add_trace(
-        go.Bar(x=methods, y=performance_scores, name="Performance", 
-               marker_color="lightblue"),
-        row=1, col=1
-    )
-    
-    # Scalability  
-    fig.add_trace(
-        go.Bar(x=methods, y=scalability_scores, name="Scalability", 
-               marker_color="lightgreen"),
-        row=1, col=2
-    )
-    
-    # Reliability
-    fig.add_trace(
-        go.Bar(x=methods, y=reliability_scores, name="Reliability", 
-               marker_color="lightsalmon"),
-        row=2, col=1
-    )
-    
-    # Total PSR
-    fig.add_trace(
-        go.Bar(x=methods, y=total_scores, name="Total PSR", 
-               marker_color="lightgoldenrodyellow"),
-        row=2, col=2
-    )
-    
-    # Обновляем layout
-    fig.update_layout(
-        height=600,
-        title_text="Сравнение PSR метрик по методам",
-        showlegend=False
-    )
-    
-    # Устанавливаем диапазон Y от 0 до 1
-    for i in range(1, 3):
-        for j in range(1, 3):
-            fig.update_yaxes(range=[0, 1], row=i, col=j)
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_advanced_semantic_sidebar():
-    """Отрисовывает настройки для продвинутого семантического анализа"""
-    
-    st.sidebar.header("⚙️ Настройки анализа")
-    
-    # Выбор методов для тестирования
-    st.sidebar.subheader("Методы чанкования")
-    test_cumulative = st.sidebar.checkbox("Cumulative", value=True, 
-                                         help="Кумулятивное накопление семантического контекста")
-    test_hierarchical = st.sidebar.checkbox("Hierarchical", value=True, 
-                                           help="Иерархическое чанкование по уровням")
-    test_adaptive = st.sidebar.checkbox("Adaptive", value=True, 
-                                       help="Адаптивный порог на основе статистики")
-    
-    # Общие параметры
-    st.sidebar.subheader("Параметры")
-    similarity_threshold = st.sidebar.slider("Порог схожести", 0.1, 1.0, 0.7, 0.05)
-    max_chunk_size = st.sidebar.slider("Макс. размер чанка", 500, 3000, 1000, 100)
-    
-    # API настройки
-    st.sidebar.subheader("API настройки")
-    api_key = st.sidebar.text_input("OpenAI API ключ", type="password", 
-                                   help="Оставьте пустым для использования Spacy fallback")
-    api_url = st.sidebar.text_input("API URL", value="https://api.openai.com/v1/embeddings")
-    model_name = st.sidebar.selectbox("Модель эмбеддингов", 
-                                     ["text-embedding-ada-002", "text-embedding-3-small", "text-embedding-3-large"])
-    
-    # Дополнительные параметры
-    with st.sidebar.expander("Дополнительные параметры"):
-        timeout = st.sidebar.slider("Таймаут (сек)", 10, 120, 30)
-        max_retries = st.sidebar.slider("Максимум повторов", 1, 10, 3)
-        window_size = st.sidebar.slider("Размер окна", 2, 10, 3)
-    
-    # Возвращаем выбранные методы и параметры
-    selected_methods = []
-    if test_cumulative:
-        selected_methods.append('cumulative')
-    if test_hierarchical:
-        selected_methods.append('hierarchical')
-    if test_adaptive:
-        selected_methods.append('adaptive')
-    
-    params = {
-        'similarity_threshold': similarity_threshold,
-        'max_chunk_size': max_chunk_size,
-        'api_url': api_url,
-        'api_key': api_key,
-        'model_name': model_name,
-        'timeout': timeout,
-        'max_retries': max_retries,
-        'window_size': window_size
-    }
-    
-    return selected_methods, params
-
-def render_advanced_semantic_page():
-    """Главная функция для отрисовки страницы продвинутого семантического анализа"""
-    
-    st.title("🧠 Продвинутый семантический анализ")
-    st.markdown("### Тестирование продвинутых методов семантического чанкования с PSR анализом")
-    
-    # Инициализируем PSR анализатор в session state
-    if 'psr_analyzer' not in st.session_state:
-        st.session_state.psr_analyzer = PSRAnalyzer()
-    
-    # Отрисовываем боковую панель с настройками
-    selected_methods, params = render_advanced_semantic_sidebar()
-    
-    # Информационная панель
-    with st.expander("ℹ️ Информация о методах", expanded=False):
-        st.markdown("""
-        **📈 Cumulative (Кумулятивный):**
-        - Накапливает семантический контекст
-        - Каждое предложение сравнивается с усредненным вектором всего чанка
-        - Лучше всего для связных текстов и документов
-        
-        **🏗️ Hierarchical (Иерархический):**
-        - Многоуровневое чанкование по структуре документа
-        - Разбивка по абзацам → семантическое чанкование → объединение
-        - Идеален для структурированных документов
-        
-        **🎯 Adaptive (Адаптивный):**
-        - Динамический порог на основе статистического анализа
-        - Автоматически подстраивается под характер текста
-        - Универсальный подход для разных типов контента
-        
-        **📊 PSR Анализ:** Performance + Scalability + Reliability
-        """)
-    
-    # Кнопка запуска анализа
-    if st.button("🚀 Запустить PSR анализ", type="primary", use_container_width=True):
-        
-        if not selected_methods:
-            st.error("Выберите хотя бы один метод для тестирования!")
-            return
-        
-        # Загружаем тестовые тексты
-        test_texts_data = load_test_texts()
-        test_texts = [item["text"] for item in test_texts_data]  # Извлекаем только тексты для анализа
-        st.info(f"Загружено {len(test_texts)} тестовых текстов")
-        
-        # Сохраняем параметры для последующего использования
-        st.session_state.last_analysis_params = params
-        
-        # Создаем прогресс-бар
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # Анализируем каждый метод
-        for i, method in enumerate(selected_methods):
-            status_text.text(f"Анализируем {method}...")
-            
-            try:
-                # Создаем чанкер
-                chunker = create_chunker(method, params)
-                
-                # Запускаем PSR анализ
-                with st.spinner(f"Анализ {method}..."):
-                    results = st.session_state.psr_analyzer.analyze_chunker(
-                        chunker, test_texts, method
-                    )
-                
-                progress_bar.progress((i + 1) / len(selected_methods))
-                
-            except Exception as e:
-                st.error(f"Ошибка при анализе {method}: {e}")
-                continue
-        
-        status_text.text("Анализ завершен!")
-        st.success("PSR анализ выполнен успешно!")
-        
-        # Обновляем интерфейс для отображения результатов
-        st.rerun()
-    
-    # Отображаем результаты, если они есть
-    if hasattr(st.session_state.psr_analyzer, 'results') and st.session_state.psr_analyzer.results:
-        
-        st.markdown("---")
-        st.header("📊 Результаты PSR анализа")
-        
-        # Создаем табы для разных методов
-        methods = list(st.session_state.psr_analyzer.results.keys())
-        
-        if len(methods) == 1:
-            # Один метод - отображаем без табов
-            method = methods[0]
-            results = st.session_state.psr_analyzer.results[method]
-            
-            st.subheader(f"Результаты для {method}")
-            render_psr_metrics(results)
-            render_detailed_metrics(results)
-            
-        else:
-            # Несколько методов - используем табы
-            tabs = st.tabs(methods + ["🏆 Сравнение"])
-            
-            # Табы для каждого метода
-            for i, method in enumerate(methods):
-                with tabs[i]:
-                    results = st.session_state.psr_analyzer.results[method]
-                    render_psr_metrics(results)
-                    render_detailed_metrics(results)
-            
-            # Таб сравнения
-            with tabs[-1]:
-                st.subheader("🏆 Сравнительный анализ")
-                
-                # График сравнения
-                create_comparison_chart(st.session_state.psr_analyzer)
-                
-                # Рекомендации
-                comparison = st.session_state.psr_analyzer.get_comparison_report()
-                if comparison and 'recommendations' in comparison:
-                    st.subheader("💡 Рекомендации")
-                    for rec in comparison['recommendations']:
-                        st.markdown(f"- {rec}")
-                
-                # Таблица рейтингов
-                if comparison and 'rankings' in comparison:
-                    st.subheader("🥇 Рейтинги")
-                    
-                    rating_cols = st.columns(4)
-                    
-                    for i, (category, rankings) in enumerate(comparison['rankings'].items()):
-                        with rating_cols[i]:
-                            st.markdown(f"**{category.title()}**")
-                            for j, item in enumerate(rankings):
-                                emoji = "🥇" if j == 0 else "🥈" if j == 1 else "🥉" if j == 2 else "📍"
-                                st.markdown(f"{emoji} {item['method']}: {item['score']:.3f}")
-                
-        # Показываем результаты чанкования тестовых текстов
-        st.markdown("---")
-        render_chunking_results()
-    
-    # Кнопка очистки результатов
-    if hasattr(st.session_state.psr_analyzer, 'results') and st.session_state.psr_analyzer.results:
-        if st.button("🗑️ Очистить результаты"):
-            st.session_state.psr_analyzer = PSRAnalyzer()
-            st.rerun()
 
 def render_chunk_visual(chunk: str, chunk_index: int, method: str = ""):
     """Отображает один чанк в простом и понятном формате"""
@@ -432,8 +61,10 @@ def render_chunk_visual(chunk: str, chunk_index: int, method: str = ""):
 def render_chunking_results():
     """Отображает результаты чанкования для всех тестовых текстов"""
     
-    if not (hasattr(st.session_state.psr_analyzer, 'results') and st.session_state.psr_analyzer.results):
-        st.info("🔍 Запустите PSR анализ, чтобы увидеть результаты чанкования тестовых текстов")
+    # Проверяем наличие результатов чанкования в session_state
+    if ('chunking_results' not in st.session_state or 
+        not st.session_state.chunking_results):
+        st.info("🔍 Запустите чанкование, чтобы увидеть результаты для тестовых текстов")
         return
     
     st.header("📋 Результаты чанкования тестовых текстов")
@@ -441,7 +72,7 @@ def render_chunking_results():
     
     # Загружаем тестовые тексты
     test_texts = load_test_texts()
-    available_methods = list(st.session_state.psr_analyzer.results.keys())
+    available_methods = list(st.session_state.chunking_results.keys())
     
     # Создаем выбор текста и метода в колонках
     col1, col2 = st.columns(2)
@@ -450,7 +81,7 @@ def render_chunking_results():
         selected_text_idx = st.selectbox(
             "📖 Выберите тестовый текст:",
             range(len(test_texts)),
-            format_func=lambda i: f"{test_texts[i]['title']} ({len(test_texts[i]['text'].split())} слов)"
+            format_func=lambda i: f"{test_texts[i]['name']} ({len(test_texts[i]['text'].split())} слов)"
         )
     
     with col2:
@@ -463,8 +94,21 @@ def render_chunking_results():
     if selected_text_idx is not None and selected_method:
         # Получаем выбранные данные
         text_data = test_texts[selected_text_idx]
-        title = text_data["title"]
+        title = text_data["name"]
         text_content = text_data["text"]
+        
+        # Ищем результаты для выбранного текста и метода
+        method_results = st.session_state.chunking_results[selected_method]
+        selected_result = None
+        
+        for result in method_results:
+            if result['text_name'] == title:
+                selected_result = result
+                break
+        
+        if not selected_result:
+            st.error("❌ Результаты чанкования для выбранного текста не найдены")
+            return
         
         # Показываем информацию о тексте
         st.markdown("---")
@@ -488,8 +132,7 @@ def render_chunking_results():
         st.markdown("---")
         st.subheader(f"🔧 Результат чанкования методом: {selected_method.title()}")
         
-        # Получаем и отображаем чанки
-        chunks = get_chunks_for_text_and_method(text_content, selected_method)
+        chunks = selected_result['chunks']
         
         if chunks:
             # Статистика чанкования
@@ -515,31 +158,114 @@ def render_chunking_results():
                     
         else:
             st.error(f"❌ Не удалось получить результаты чанкования для метода {selected_method}")
-            st.info("Попробуйте запустить PSR анализ заново")
 
-def get_chunks_for_text_and_method(text: str, method: str) -> List[str]:
-    """Получает результаты чанкования для конкретного текста и метода"""
+def get_chunks_for_text_and_method(text: str, method_name: str, params: Optional[Dict[str, Any]] = None) -> Tuple[List[str], Dict[str, Any]]:
+    """Получает чанки для текста и метода с отладочной информацией"""
+    
+    if params is None:
+        params = {}
+    
+    start_time = time.time()
+    
+    # Добавляем отладочную информацию
+    st.write(f"🔧 **Отладка**: Запуск метода `{method_name}` с параметрами:")
+    st.json(params)
+    
     try:
-        # Создаем чанкер с теми же параметрами, что использовались в анализе
-        if hasattr(st.session_state, 'last_analysis_params'):
-            params = st.session_state.last_analysis_params
-        else:
-            # Используем параметры по умолчанию, если анализ был запущен в предыдущей сессии
-            params = {
-                'similarity_threshold': 0.7,
-                'max_chunk_size': 1000,
-                'api_url': 'https://api.openai.com/v1/embeddings',
-                'api_key': '',
-                'model_name': 'text-embedding-ada-002',
-                'timeout': 30,
-                'max_retries': 3,
-                'window_size': 3
-            }
+        chunker = get_chunker_by_name(method_name, params)
         
-        chunker = create_chunker(method, params)
+        if chunker is None:
+            st.error(f"❌ Chunker {method_name} не найден!")
+            return [], {}
+        
+        st.write(f"✅ **Chunker создан**: {type(chunker).__name__}")
+        
+        # Получаем чанки
         chunks = chunker.chunk_text(text)
-        return chunks
+        
+        end_time = time.time()
+        processing_time = end_time - start_time
+        
+        # Сохраняем параметры chunker'а для отображения
+        chunker_params = getattr(chunker, 'get_params', lambda: {})()
+        
+        # Отладочная информация о результатах
+        st.write(f"⏱️ **Время обработки**: {processing_time:.2f} сек")
+        st.write(f"📊 **Результат**: {len(chunks)} чанков")
+        
+        if len(chunks) > 0:
+            st.write(f"📏 **Размеры чанков**: {[len(chunk) for chunk in chunks]}")
+        
+        # Проверяем различные факторы 
+        if hasattr(chunker, '_get_embeddings_api'):
+            st.write("🧠 **API эмбеддинги**: доступны")
+        elif hasattr(chunker, '_load_spacy_model'):
+            st.write("🔄 **Fallback**: используется Spacy")
+        
+        metadata = {
+            'processing_time': processing_time,
+            'chunker_type': type(chunker).__name__,
+            'chunker_params': chunker_params,
+            'chunks_count': len(chunks),
+            'chunk_sizes': [len(chunk) for chunk in chunks]
+        }
+        
+        return chunks, metadata
         
     except Exception as e:
-        st.error(f"Ошибка при получении чанков: {e}")
-        return [] 
+        st.error(f"❌ **Ошибка в чанковании**: {str(e)}")
+        st.exception(e)  # Показываем полный stack trace
+        return [], {}
+
+def display_chunking_results(chunks: List[str], metadata: Dict[str, Any], method_name: str):
+    """Отображает результаты чанкования с метаданными"""
+    st.subheader(f"📋 Результаты для метода: {method_name}")
+    
+    # Отображаем метаданные
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("⏱️ Время", f"{metadata.get('processing_time', 0):.2f}с")
+    
+    with col2:
+        st.metric("📊 Чанков", metadata.get('chunks_count', 0))
+    
+    with col3:
+        avg_size = sum(metadata.get('chunk_sizes', [0])) / max(len(metadata.get('chunk_sizes', [1])), 1)
+        st.metric("📏 Ср. размер", f"{int(avg_size)} симв.")
+    
+    with col4:
+        # Показываем источник эмбеддингов
+        if metadata.get('cache_info'):
+            cache_info = metadata['cache_info']
+            if cache_info['cached_texts'] > 0:
+                st.metric("🎯 Эмбеддинги", "Из кэша")
+            else:
+                st.metric("🔄 Эмбеддинги", "Новые")
+        else:
+            st.metric("🧠 Эмбеддинги", "API/Spacy")
+    
+    # Показываем информацию о кэше если доступна
+    if metadata.get('cache_info'):
+        cache_info = metadata['cache_info']
+        with st.expander("🧠 Информация о кэше эмбеддингов"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Кэшированных текстов", cache_info['cached_texts'])
+            with col2:
+                st.metric("Всего предложений", cache_info['total_sentences'])
+            with col3:
+                st.metric("Размер кэша", f"{cache_info['cache_size_mb']:.2f} MB")
+    
+    # Показываем параметры chunker'а
+    if metadata.get('chunker_params'):
+        with st.expander("⚙️ Использованные параметры"):
+            st.json(metadata['chunker_params'])
+    
+    # Отображаем чанки
+    if chunks:
+        for i, chunk in enumerate(chunks, 1):
+            with st.expander(f"Чанк {i} ({len(chunk)} символов)"):
+                st.text(chunk)
+    else:
+        st.warning("❌ Чанки не созданы") 
