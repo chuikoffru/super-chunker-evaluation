@@ -412,58 +412,22 @@ def render_advanced_semantic_page():
             st.session_state.psr_analyzer = PSRAnalyzer()
             st.rerun()
 
-def render_chunk_visual(chunk: str, chunk_index: int, word_count: int, text_id: str = "", method: str = ""):
-    """Отображает один чанк в красивом контейнере"""
-    # Создаем цветовую схему на основе индекса
-    colors = ['lightblue', 'lightgreen', 'lightyellow', 'lightcoral', 'lightpink', 'lightgray']
-    bg_color = colors[chunk_index % len(colors)]
+def render_chunk_visual(chunk: str, chunk_index: int, method: str = ""):
+    """Отображает один чанк в простом и понятном формате"""
+    word_count = len(chunk.split())
+    char_count = len(chunk)
     
-    # Обрезаем текст для предварительного просмотра
-    preview_text = chunk[:200] + "..." if len(chunk) > 200 else chunk
+    # Простой заголовок с метриками
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        st.markdown(f"**📄 Чанк {chunk_index + 1}**")
+    with col2:
+        st.markdown(f"*{word_count} слов*")
+    with col3:
+        st.markdown(f"*{char_count} символов*")
     
-    st.markdown(f"""
-    <div style="
-        background-color: {bg_color};
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 4px solid #2E86AB;
-        margin: 5px 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    ">
-        <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        ">
-            <strong>📄 Чанк {chunk_index + 1}</strong>
-            <span style="
-                background-color: #2E86AB;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 12px;
-                font-size: 12px;
-            ">
-                {word_count} слов
-            </span>
-        </div>
-        <div style="
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.4;
-            color: #333;
-        ">
-            {preview_text}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Показываем полный текст в expander, если он был обрезан
-    if len(chunk) > 200:
-        with st.expander(f"Показать полный текст чанка {chunk_index + 1}"):
-            # Создаем уникальный ключ с учетом всех контекстов
-            unique_key = f"chunk_{text_id}_{method}_{chunk_index}_{abs(hash(chunk)) % 1000000}"
-            st.text_area("", value=chunk, height=100, disabled=True, key=unique_key)
+    # Отображаем чанк с помощью st.code
+    st.code(chunk, language="text", wrap_lines=True)
 
 def render_chunking_results():
     """Отображает результаты чанкования для всех тестовых текстов"""
@@ -475,90 +439,83 @@ def render_chunking_results():
     st.header("📋 Результаты чанкования тестовых текстов")
     st.markdown("Просмотрите как каждый метод разбивает тестовые тексты на чанки")
     
-    # Загружаем тестовые тексты с названиями
+    # Загружаем тестовые тексты
     test_texts = load_test_texts()
-    
-    # Получаем методы, для которых есть результаты
     available_methods = list(st.session_state.psr_analyzer.results.keys())
     
-    # Показываем expander для каждого тестового текста
-    for text_idx, text_data in enumerate(test_texts):
+    # Создаем выбор текста и метода в колонках
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        selected_text_idx = st.selectbox(
+            "📖 Выберите тестовый текст:",
+            range(len(test_texts)),
+            format_func=lambda i: f"{test_texts[i]['title']} ({len(test_texts[i]['text'].split())} слов)"
+        )
+    
+    with col2:
+        selected_method = st.selectbox(
+            "🔧 Выберите метод чанкования:",
+            available_methods,
+            format_func=lambda x: x.title()
+        )
+    
+    if selected_text_idx is not None and selected_method:
+        # Получаем выбранные данные
+        text_data = test_texts[selected_text_idx]
         title = text_data["title"]
         text_content = text_data["text"]
         
-        # Создаем безопасный идентификатор для ключей
-        safe_text_id = f"text_{text_idx}"
+        # Показываем информацию о тексте
+        st.markdown("---")
+        st.subheader(f"📖 {title}")
         
-        # Подсчитываем статистику исходного текста
-        char_count = len(text_content)
-        word_count = len(text_content.split())
+        # Статистика исходного текста
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📝 Символов", len(text_content))
+        with col2:
+            st.metric("📝 Слов", len(text_content.split()))
+        with col3:
+            sentences = len([s for s in text_content.split('.') if s.strip()])
+            st.metric("📝 Предложений", sentences)
         
-        with st.expander(f"📖 {title} ({word_count} слов, {char_count} символов)", expanded=False):
-            
-            # Показываем превью исходного текста
-            st.markdown("**📝 Исходный текст:**")
-            preview_text = text_content[:300] + "..." if len(text_content) > 300 else text_content
-            st.markdown(f"*{preview_text}*")
-            
-            if len(text_content) > 300:
-                with st.expander("Показать полный исходный текст"):
-                    st.text_area("", value=text_content, height=150, disabled=True, 
-                               key=f"original_{safe_text_id}_{abs(hash(text_content)) % 1000000}")
+        # Показываем исходный текст
+        st.markdown("**📝 Исходный текст:**")
+        st.code(text_content, language="text", wrap_lines=True)
+        
+        # Разделитель
+        st.markdown("---")
+        st.subheader(f"🔧 Результат чанкования методом: {selected_method.title()}")
+        
+        # Получаем и отображаем чанки
+        chunks = get_chunks_for_text_and_method(text_content, selected_method)
+        
+        if chunks:
+            # Статистика чанкования
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📊 Количество чанков", len(chunks))
+            with col2:
+                avg_chunk_size = sum(len(chunk.split()) for chunk in chunks) / len(chunks)
+                st.metric("📏 Средний размер", f"{avg_chunk_size:.1f} слов")
+            with col3:
+                total_words = sum(len(chunk.split()) for chunk in chunks)
+                original_words = len(text_content.split())
+                coverage = (total_words / original_words) * 100 if original_words > 0 else 0
+                st.metric("🎯 Покрытие", f"{coverage:.1f}%")
             
             st.markdown("---")
             
-            # Создаем табы для каждого метода
-            if len(available_methods) == 1:
-                # Один метод - без табов
-                method = available_methods[0]
-                st.subheader(f"🔧 Метод: {method.title()}")
-                
-                # Получаем чанки для этого текста и метода
-                chunks = get_chunks_for_text_and_method(text_content, method)
-                
-                if chunks:
-                    st.markdown(f"**Количество чанков:** {len(chunks)}")
+            # Отображаем каждый чанк отдельно
+            for chunk_idx, chunk in enumerate(chunks):
+                render_chunk_visual(chunk, chunk_idx, selected_method)
+                if chunk_idx < len(chunks) - 1:  # Добавляем разделитель между чанками
+                    st.markdown("---")
                     
-                    # Отображаем каждый чанк
-                    for chunk_idx, chunk in enumerate(chunks):
-                        chunk_word_count = len(chunk.split())
-                        render_chunk_visual(chunk, chunk_idx, chunk_word_count, 
-                                          text_id=safe_text_id, method=method)
-                else:
-                    st.warning(f"Не удалось получить результаты чанкования для метода {method}")
-            
-            else:
-                # Несколько методов - используем табы
-                method_tabs = st.tabs([f"🔧 {method.title()}" for method in available_methods])
-                
-                for tab_idx, method in enumerate(available_methods):
-                    with method_tabs[tab_idx]:
-                        
-                        # Получаем чанки для этого текста и метода
-                        chunks = get_chunks_for_text_and_method(text_content, method)
-                        
-                        if chunks:
-                            # Статистика чанкования
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("📊 Количество чанков", len(chunks))
-                            with col2:
-                                avg_chunk_size = sum(len(chunk.split()) for chunk in chunks) / len(chunks)
-                                st.metric("📏 Средний размер", f"{avg_chunk_size:.1f} слов")
-                            with col3:
-                                total_words = sum(len(chunk.split()) for chunk in chunks)
-                                coverage = (total_words / word_count) * 100
-                                st.metric("🎯 Покрытие", f"{coverage:.1f}%")
-                            
-                            st.markdown("---")
-                            
-                            # Отображаем каждый чанк
-                            for chunk_idx, chunk in enumerate(chunks):
-                                chunk_word_count = len(chunk.split())
-                                render_chunk_visual(chunk, chunk_idx, chunk_word_count, 
-                                                  text_id=safe_text_id, method=method)
-                        else:
-                            st.warning(f"Не удалось получить результаты чанкования для метода {method}")
+        else:
+            st.error(f"❌ Не удалось получить результаты чанкования для метода {selected_method}")
+            st.info("Попробуйте запустить PSR анализ заново")
 
 def get_chunks_for_text_and_method(text: str, method: str) -> List[str]:
     """Получает результаты чанкования для конкретного текста и метода"""
