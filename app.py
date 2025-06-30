@@ -18,9 +18,9 @@ def main():
     
     # Определяем страницы
     pages = [
-        st.Page(show_documentation_page, title="📚 Документация", icon="📚", default=True),
-        st.Page(show_basic_page, title="🏠 Базовое чанкование", icon="🏠"),
-        st.Page(show_advanced_page, title="🧠 Продвинутый анализ", icon="🧠")
+        st.Page(show_documentation_page, title="Документация", icon="📚", default=True),
+        st.Page(show_basic_page, title="Базовое чанкование", icon="🏠"),
+        st.Page(show_advanced_page, title="Продвинутый анализ", icon="🧠")
     ]
     
     # Создаем навигацию
